@@ -1,12 +1,16 @@
 #!/usr/bin/env python3
-"""Neoracer camera label dashboard: capture frames, box-label, save YOLO data.
+"""Neoracer camera label dashboard: collect frames, then label them, YOLO out.
 
-Same pattern as wallfollow.py (stdlib HTTP + rclpy) on port 8082. Frames come
-from /camera (the driver publishes JPEG bytes inside an Image message).
-Save writes dataset/images/imgN.jpg plus dataset/labels/imgN.txt in YOLO
-format (class_id cx cy w h, all normalized 0..1) and keeps classes.txt in
-sync, so the dataset trains directly. Saved images can be reviewed with
-their boxes, and training parameters save to dataset/train_params.txt.
+Two-stage workflow on port 8082 (stdlib HTTP + rclpy, wallfollow pattern):
+  Collect: Snap saves the current camera frame to dataset/unlabeled/.
+  Label:   pick an unlabeled image, drag boxes, save. The file moves to
+           dataset/images/ with a YOLO label file in dataset/labels/
+           (class_id cx cy w h, normalized) and classes.txt stays in sync.
+
+camlabel.yaml sets the live-preview resolution sent to the browser. Saved
+images are always the full camera frame. Thumbnails, immutable file names
+with long browser caching, and one combined /info endpoint keep the
+many-cars-one-room WiFi load low.
 """
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -15,21 +19,35 @@ from pathlib import Path
 import re
 import threading
 
+import cv2
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
+import yaml
 
 PORT = 8082
 BASE = Path(__file__).resolve().parent
 DATASET = BASE / 'dataset'
+UNLABELED = DATASET / 'unlabeled'
 IMAGES = DATASET / 'images'
 LABELS = DATASET / 'labels'
 
-_lock = threading.Lock()
+CACHE_FOREVER = 'max-age=31536000, immutable'
+
+_lock = threading.Lock()      # latest frame
+_fs_lock = threading.Lock()   # file numbering and moves
 _live = b''
 _preview = b''
-_pending = b''
+_cam_res = [0, 0]
+_thumbs = {}
+
+_cfg = {'preview_width': 320, 'preview_quality': 45}
+try:
+    _cfg.update(yaml.safe_load((BASE / 'camlabel.yaml').read_text()) or {})
+except OSError:
+    pass
 
 
 class CameraNode(Node):
@@ -38,9 +56,7 @@ class CameraNode(Node):
         self.create_subscription(Image, '/camera', self._cb, qos_profile_sensor_data)
 
     def _cb(self, msg):
-        global _live, _preview
-        import cv2
-        import numpy as np
+        global _live, _preview, _cam_res
         if msg.encoding == 'jpeg':
             data = bytes(msg.data)
             arr = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
@@ -50,22 +66,45 @@ class CameraNode(Node):
             if msg.encoding == 'rgb8':
                 arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
             data = cv2.imencode('.jpg', arr)[1].tobytes()
-        # The live view streams a small low-quality preview (about 10 KB vs
-        # 70 KB) so many cars and laptops fit in the shared WiFi airtime.
-        # Capture and the saved dataset keep the full-resolution frame.
-        prev = data
+        prev, res = data, [msg.width, msg.height]
         if arr is not None:
-            small = cv2.resize(arr, (320, 240))
-            prev = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 45])[1].tobytes()
+            h, w = arr.shape[:2]
+            res = [w, h]
+            pw = int(_cfg['preview_width'])
+            small = cv2.resize(arr, (pw, max(1, round(pw * h / w))))
+            quality = [cv2.IMWRITE_JPEG_QUALITY, int(_cfg['preview_quality'])]
+            prev = cv2.imencode('.jpg', small, quality)[1].tobytes()
         with _lock:
             _live = data
             _preview = prev
+            _cam_res = res
 
 
-def _img_number(name):
-    """img7.jpg -> 7, so numbering counts up."""
-    m = re.match(r'img(\d+)\.jpg$', name)
+def _num(name):
+    """u7.jpg or img7.jpg -> 7."""
+    m = re.search(r'(\d+)\.jpg$', name)
     return int(m.group(1)) if m else 0
+
+
+def _nums(folder, pattern):
+    return sorted(_num(f.name) for f in folder.glob(pattern)) if folder.exists() else []
+
+
+def _entries(folder, pattern):
+    """[[number, mtime_ns], ...] so the browser can cache files forever yet
+    never show a stale image if a dataset is wiped and numbers restart."""
+    if not folder.exists():
+        return []
+    return sorted([_num(f.name), f.stat().st_mtime_ns] for f in folder.glob(pattern))
+
+
+def _next_unlabeled_number():
+    """Monotonic counter so unlabeled names are never reused. Unique names
+    let the browser cache every image and thumbnail forever."""
+    f = DATASET / 'ucounter'
+    n = (int(f.read_text()) if f.exists() else 0) + 1
+    f.write_text(str(n))
+    return n
 
 
 def _class_id(name):
@@ -78,10 +117,32 @@ def _class_id(name):
     return classes.index(name)
 
 
+def _thumb(path):
+    """160-wide jpeg thumbnail, cached in memory. Safe because file names
+    are never reused within a dataset."""
+    key = f'{path}:{path.stat().st_mtime_ns}'
+    t = _thumbs.get(key)
+    if t is None:
+        arr = cv2.imdecode(np.frombuffer(path.read_bytes(), np.uint8), cv2.IMREAD_COLOR)
+        if arr is None:
+            return b''
+        h, w = arr.shape[:2]
+        small = cv2.resize(arr, (160, max(1, round(160 * h / w))))
+        t = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 50])[1].tobytes()
+        if len(_thumbs) > 600:
+            _thumbs.clear()
+        _thumbs[key] = t
+    return t
+
+
 class Handler(BaseHTTPRequestHandler):
     # Keep-alive: reuse one TCP connection per viewer instead of a new
-    # handshake per frame. Matters a lot on congested WiFi.
+    # handshake per request. Matters a lot on congested WiFi.
     protocol_version = 'HTTP/1.1'
+
+    def _query_n(self):
+        return int(self.path.split('n=')[1].split('&')[0])
+
     def do_GET(self):
         if self.path == '/':
             self._send((BASE / 'camlabel.html').read_bytes(), 'text/html; charset=utf-8')
@@ -89,31 +150,33 @@ class Handler(BaseHTTPRequestHandler):
             with _lock:
                 data = _preview
             if data:
-                self._send(data, 'image/jpeg')
+                self._send(data, 'image/jpeg', cache='no-store')
             else:
                 self.send_error(503)
-        elif self.path.startswith('/pending'):
+        elif self.path == '/info':
             with _lock:
-                data = _pending
+                res = list(_cam_res)
+            body = json.dumps({
+                'cam': res,
+                'preview_width': int(_cfg['preview_width']),
+                'unlabeled': _entries(UNLABELED, 'u*.jpg'),
+                'labeled': _entries(IMAGES, 'img*.jpg'),
+            })
+            self._send(body.encode(), 'application/json')
+        elif self.path.startswith('/uimg?'):
+            self._send_file(UNLABELED / f'u{self._query_n()}.jpg')
+        elif self.path.startswith('/img?'):
+            self._send_file(IMAGES / f'img{self._query_n()}.jpg')
+        elif self.path.startswith('/thumb?'):
+            pool, stem = (UNLABELED, 'u') if 'src=u' in self.path else (IMAGES, 'img')
+            f = pool / f'{stem}{self._query_n()}.jpg'
+            data = _thumb(f) if f.is_file() else b''
             if data:
-                self._send(data, 'image/jpeg')
+                self._send(data, 'image/jpeg', cache=CACHE_FOREVER)
             else:
                 self.send_error(404)
-        elif self.path == '/count':
-            n = len(list(IMAGES.glob('img*.jpg'))) if IMAGES.exists() else 0
-            self._send(json.dumps({'count': n}).encode(), 'application/json')
-        elif self.path == '/images':
-            nums = sorted(_img_number(f.name) for f in IMAGES.glob('img*.jpg')) \
-                if IMAGES.exists() else []
-            self._send(json.dumps(nums).encode(), 'application/json')
-        elif self.path.startswith('/img?n='):
-            f = IMAGES / f'img{int(self.path.split("=")[1])}.jpg'
-            if f.is_file():
-                self._send(f.read_bytes(), 'image/jpeg')
-            else:
-                self.send_error(404)
-        elif self.path.startswith('/label?n='):
-            f = LABELS / f'img{int(self.path.split("=")[1])}.txt'
+        elif self.path.startswith('/label?'):
+            f = LABELS / f'img{self._query_n()}.txt'
             path = DATASET / 'classes.txt'
             classes = path.read_text().splitlines() if path.exists() else []
             boxes = []
@@ -128,14 +191,38 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_POST(self):
-        global _pending
-        if self.path == '/capture':
+        if self.path == '/snap':
             with _lock:
-                _pending = _live
-            self._send(b'ok', 'text/plain')
-        elif self.path == '/discard':
-            with _lock:
-                _pending = b''
+                data = _live
+            if not data:
+                self.send_error(503)
+                return
+            with _fs_lock:
+                UNLABELED.mkdir(parents=True, exist_ok=True)
+                n = _next_unlabeled_number()
+                (UNLABELED / f'u{n}.jpg').write_bytes(data)
+            self._send(json.dumps({'n': n}).encode(), 'application/json')
+        elif self.path == '/label':
+            req = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            src = UNLABELED / f'u{int(req["n"])}.jpg'
+            if not src.is_file():
+                self.send_error(404)
+                return
+            with _fs_lock:
+                IMAGES.mkdir(parents=True, exist_ok=True)
+                LABELS.mkdir(parents=True, exist_ok=True)
+                m = max(_nums(IMAGES, 'img*.jpg'), default=0) + 1
+                src.rename(IMAGES / f'img{m}.jpg')
+                lines = [f'{_class_id(b["cls"])} '
+                         f'{b["cx"]:.6f} {b["cy"]:.6f} {b["w"]:.6f} {b["h"]:.6f}'
+                         for b in req['boxes']]
+                (LABELS / f'img{m}.txt').write_text('\n'.join(lines) + '\n' if lines else '')
+            self._send(json.dumps({'img': m}).encode(), 'application/json')
+        elif self.path == '/delu':
+            req = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            f = UNLABELED / f'u{int(req["n"])}.jpg'
+            if f.is_file():
+                f.unlink()
             self._send(b'ok', 'text/plain')
         elif self.path == '/train_params':
             params = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
@@ -143,30 +230,21 @@ class Handler(BaseHTTPRequestHandler):
             lines = [f'{k}: {v}' for k, v in params.items()]
             (DATASET / 'train_params.txt').write_text('\n'.join(lines) + '\n')
             self._send(b'ok', 'text/plain')
-        elif self.path == '/save':
-            boxes = json.loads(self.rfile.read(int(self.headers['Content-Length'])))['boxes']
-            with _lock:
-                data = _pending
-                _pending = b''
-            if not data:
-                self.send_error(409)
-                return
-            IMAGES.mkdir(parents=True, exist_ok=True)
-            LABELS.mkdir(parents=True, exist_ok=True)
-            n = max((_img_number(f.name) for f in IMAGES.glob('img*.jpg')), default=0) + 1
-            (IMAGES / f'img{n}.jpg').write_bytes(data)
-            lines = [f'{_class_id(b["cls"])} {b["cx"]:.6f} {b["cy"]:.6f} {b["w"]:.6f} {b["h"]:.6f}'
-                     for b in boxes]
-            (LABELS / f'img{n}.txt').write_text('\n'.join(lines) + '\n' if lines else '')
-            self._send(json.dumps({'saved': f'img{n}.jpg', 'count': n}).encode(),
-                       'application/json')
         else:
             self.send_error(404)
 
-    def _send(self, body, ctype):
+    def _send_file(self, f):
+        if f.is_file():
+            self._send(f.read_bytes(), 'image/jpeg', cache=CACHE_FOREVER)
+        else:
+            self.send_error(404)
+
+    def _send(self, body, ctype, cache=None):
         self.send_response(200)
         self.send_header('Content-Type', ctype)
         self.send_header('Content-Length', str(len(body)))
+        if cache:
+            self.send_header('Cache-Control', cache)
         self.end_headers()
         self.wfile.write(body)
 
@@ -178,7 +256,8 @@ def main():
     rclpy.init()
     node = CameraNode()
     threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
-    print(f'Camera label dashboard on http://0.0.0.0:{PORT}')
+    print(f'Camera label dashboard on http://0.0.0.0:{PORT} '
+          f'(preview {_cfg["preview_width"]}px)')
     ThreadingHTTPServer(('0.0.0.0', PORT), Handler).serve_forever()
 
 

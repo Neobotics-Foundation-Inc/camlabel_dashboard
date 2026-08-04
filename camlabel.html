@@ -9,18 +9,17 @@
   :root { --white: #FFFFFF; --halo: #F5F5F7; --steel: #E2E2E2; --carbon: #1D1D27; --tarmac: #1B2036; --red: #FF0033; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--white); color: var(--carbon); }
-  .topbar { background: var(--tarmac); color: var(--halo); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+  .topbar { background: var(--tarmac); color: var(--halo); padding: 0.8rem 1.5rem; }
   .topbar h1 { font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif; font-size: 1.3rem; }
-  .topbar button { background: transparent; border: 1px solid rgba(245, 245, 247, 0.5); color: var(--halo); font-family: inherit; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; margin: 0; }
-  .topbar button:hover { background: rgba(245, 245, 247, 0.15); }
   .meta { color: rgba(245, 245, 247, 0.72); font-size: 0.85rem; margin-top: 0.2rem; }
   .meta b { color: var(--white); }
   main { padding: 1rem 1.5rem; }
-  .grid { display: grid; grid-template-columns: 1fr 280px; gap: 1rem; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
-  .card { background: var(--white); border: 1px solid var(--steel); border-radius: 12px; padding: 1rem; box-shadow: 0 6px 18px rgba(29, 29, 39, 0.08); }
+  .card { background: var(--white); border: 1px solid var(--steel); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; box-shadow: 0 6px 18px rgba(29, 29, 39, 0.08); }
   .card h2 { font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif; font-size: 1rem; color: var(--tarmac); margin-bottom: 0.5rem; }
-  canvas { background: var(--tarmac); border-radius: 6px; width: 100%; cursor: crosshair; }
+  canvas { background: var(--tarmac); border-radius: 6px; width: 100%; max-width: 440px; display: block; }
+  #lab { cursor: crosshair; }
   label { display: block; color: rgba(29, 29, 39, 0.6); font-size: 0.8rem; margin-top: 0.6rem; }
   input { width: 100%; background: var(--white); border: 1px solid var(--steel); color: var(--carbon); font-family: inherit; padding: 0.4rem; border-radius: 6px; font-size: 1rem; }
   button { background: var(--white); border: 1px solid var(--tarmac); color: var(--tarmac); font-family: inherit; padding: 0.35rem 0.8rem; border-radius: 6px; margin: 0.8rem 0.4rem 0 0; cursor: pointer; }
@@ -28,47 +27,55 @@
   button.primary { background: var(--red); border-color: var(--red); color: var(--white); }
   .readout { font-size: 0.85rem; margin-top: 0.6rem; white-space: pre-line; }
   .desc { display: block; font-size: 0.72rem; color: rgba(29, 29, 39, 0.5); margin-top: 2px; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 6px; }
+  .thumbs img { width: 120px; border-radius: 4px; cursor: pointer; border: 2px solid transparent; }
+  .thumbs img:hover { border-color: var(--tarmac); }
+  .thumbs img.sel { border-color: var(--red); }
 </style>
 </head>
 <body>
 
 <div class="topbar">
-<div>
 <h1>Camera Label Dashboard</h1>
-<div class="meta">state: <b id="state">LIVE</b> &bull; saved images: <b id="count">0</b></div>
-</div>
-<button id="revbtn" onclick="toggleReview()" title="Browse saved images with their boxes">Review</button>
+<div class="meta">unlabeled: <b id="ucount">0</b> &bull; labeled: <b id="lcount">0</b>
+  &bull; camera: <b id="res">?</b> &bull; browser preview: <b id="pres">?</b></div>
 </div>
 <main>
+
 <div class="grid">
   <div class="card">
-    <h2>Camera</h2>
-    <canvas id="cam" width="640" height="480" style="max-width:440px; display:block"></canvas>
+    <h2>1. Collect</h2>
+    <canvas id="cam" width="640" height="480"></canvas>
+    <button class="primary" onclick="snap()">Snap</button>
+    <span class="readout" id="snapinfo">Spacebar also snaps. Each snap saves a full-resolution frame.</span>
   </div>
   <div class="card">
-    <h2>Label</h2>
+    <h2>2. Label</h2>
+    <canvas id="lab" width="640" height="480"></canvas>
     <label>class (typed name goes into each box you drag)
       <input id="cls" type="text" placeholder="cone" value="">
     </label>
-    <button class="primary" id="capbtn" onclick="capture()">Capture</button>
-    <button onclick="saveImg()">Save</button>
-    <button onclick="discard()">Discard</button>
+    <button class="primary" onclick="saveLabels()">Save labels</button>
+    <button onclick="skip()">Skip</button>
+    <button onclick="delImg()">Delete image</button>
     <button onclick="undo()">Undo box</button>
-    <div class="readout" id="boxlist">Capture freezes the frame. Drag on the image to box an object.</div>
+    <div class="readout" id="boxlist">Click an unlabeled image below to start. Enter saves.</div>
   </div>
 </div>
 
-<div class="card" id="revcard" style="margin-top:1rem; display:none; border-color:#FF0033">
-  <h2>Saved images (review)
-    <button onclick="toggleReview()" style="float:right; margin:0">Close</button>
-  </h2>
-  <canvas id="revcam" width="640" height="480" style="max-width:440px; display:block; cursor:default"></canvas>
-  <button onclick="step(-1)">Prev</button>
-  <button onclick="step(1)">Next</button>
+<div class="card">
+  <h2>Unlabeled images (<span id="ucount2">0</span>)</h2>
+  <div class="thumbs" id="uthumbs">None yet. Snap some frames above.</div>
+</div>
+
+<div class="card">
+  <h2>Labeled images (<span id="lcount2">0</span>)</h2>
+  <div class="thumbs" id="lthumbs">None yet.</div>
+  <canvas id="revcam" width="640" height="480" style="cursor:default; margin-top:0.8rem; display:none"></canvas>
   <span class="readout" id="revinfo"></span>
 </div>
 
-<div class="card" style="margin-top:1rem">
+<div class="card">
   <h2>Training parameters (YOLO)</h2>
   <div id="tp" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0 1rem"></div>
   <button onclick="saveParams()">Save params</button>
@@ -77,111 +84,153 @@
 </main>
 
 <script>
-const c = document.getElementById('cam'), ctx = c.getContext('2d');
-const img = new Image();
-let mode = 'live', boxes = [], drag = null;
-
-img.onload = draw;
-// Pull frames one at a time: the next request goes out only after the
-// previous one lands, so a congested WiFi link degrades to a lower frame
-// rate instead of a request pile-up. Pauses when the tab is hidden.
+// ---- Live view (collect) ----
+const cam = document.getElementById('cam'), camx = cam.getContext('2d');
+const limg = new Image();
+limg.onload = () => camx.drawImage(limg, 0, 0, cam.width, cam.height);
+// Pull frames one at a time so a congested link drops frame rate instead
+// of building a lag queue. Pauses when the tab is hidden.
 (function liveLoop() {
-  if (mode !== 'live' || document.hidden) { setTimeout(liveLoop, 250); return; }
+  if (document.hidden) { setTimeout(liveLoop, 250); return; }
   const t = Date.now();
   const done = () => {
-    img.removeEventListener('load', done); img.removeEventListener('error', done);
+    limg.removeEventListener('load', done); limg.removeEventListener('error', done);
     setTimeout(liveLoop, Math.max(20, 160 - (Date.now() - t)));
   };
-  img.addEventListener('load', done); img.addEventListener('error', done);
-  img.src = '/frame?' + t;
+  limg.addEventListener('load', done); limg.addEventListener('error', done);
+  limg.src = '/frame?' + t;
 })();
 
-function draw() {
-  ctx.drawImage(img, 0, 0, c.width, c.height);
-  ctx.font = '14px Helvetica'; ctx.lineWidth = 2; ctx.strokeStyle = '#FF0033';
+function snap() {
+  fetch('/snap', { method: 'POST' }).then(r => r.json()).then(d => {
+    document.getElementById('snapinfo').textContent = `Saved u${d.n}.jpg`;
+    refresh();
+  });
+}
+
+// ---- Labeling ----
+const lab = document.getElementById('lab'), labx = lab.getContext('2d');
+const uimg = new Image();
+let current = null, boxes = [], drag = null;
+uimg.onload = drawLab;
+
+function drawLab() {
+  labx.clearRect(0, 0, lab.width, lab.height);
+  if (current === null) return;
+  labx.drawImage(uimg, 0, 0, lab.width, lab.height);
+  labx.font = '14px Helvetica'; labx.lineWidth = 2; labx.strokeStyle = '#FF0033';
   for (const b of boxes) {
-    ctx.strokeRect(b.x, b.y, b.w, b.h);
-    ctx.fillStyle = '#FF0033';
-    ctx.fillRect(b.x, b.y - 18, ctx.measureText(b.cls).width + 10, 18);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillText(b.cls, b.x + 5, b.y - 5);
+    labx.strokeRect(b.x, b.y, b.w, b.h);
+    labx.fillStyle = '#FF0033';
+    labx.fillRect(b.x, b.y - 18, labx.measureText(b.cls).width + 10, 18);
+    labx.fillStyle = '#FFFFFF';
+    labx.fillText(b.cls, b.x + 5, b.y - 5);
   }
-  if (drag) { ctx.setLineDash([6, 4]); ctx.strokeRect(drag.x, drag.y, drag.w, drag.h); ctx.setLineDash([]); }
+  if (drag) { labx.setLineDash([6, 4]); labx.strokeRect(drag.x, drag.y, drag.w, drag.h); labx.setLineDash([]); }
+}
+
+function pick(n) {
+  current = n; boxes = [];
+  uimg.src = `/uimg?n=${n}&v=${uv[n]}`;
+  list();
+  for (const el of document.querySelectorAll('#uthumbs img')) {
+    el.classList.toggle('sel', el.dataset.n == n);
+  }
 }
 
 function pos(e) {
-  const r = c.getBoundingClientRect();
-  return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height];
+  const r = lab.getBoundingClientRect();
+  return [(e.clientX - r.left) * lab.width / r.width, (e.clientY - r.top) * lab.height / r.height];
 }
-c.onmousedown = e => {
-  if (mode !== 'label') return;
+lab.onmousedown = e => {
+  if (current === null) return;
   const [x, y] = pos(e);
   drag = { x0: x, y0: y, x, y, w: 0, h: 0 };
 };
-c.onmousemove = e => {
+lab.onmousemove = e => {
   if (!drag) return;
   const [x, y] = pos(e);
   drag.x = Math.min(x, drag.x0); drag.y = Math.min(y, drag.y0);
   drag.w = Math.abs(x - drag.x0); drag.h = Math.abs(y - drag.y0);
-  draw();
+  drawLab();
 };
-c.onmouseup = () => {
+lab.onmouseup = () => {
   if (!drag) return;
   if (drag.w > 5 && drag.h > 5) {
     boxes.push({ x: drag.x, y: drag.y, w: drag.w, h: drag.h,
                  cls: document.getElementById('cls').value.trim() || 'unlabeled' });
   }
-  drag = null; draw(); list();
+  drag = null; drawLab(); list();
 };
 
 function list() {
-  document.getElementById('boxlist').textContent = boxes.length
-    ? boxes.map((b, i) => `${i + 1}. ${b.cls}`).join('\n')
-    : 'Drag on the image to box an object.';
+  document.getElementById('boxlist').textContent = current === null
+    ? 'Click an unlabeled image below to start. Enter saves.'
+    : boxes.length
+      ? `u${current}: ` + boxes.map(b => b.cls).join(', ')
+      : `u${current}: drag to box an object, or Save with no boxes for a negative.`;
 }
 
-function setState(s) {
-  mode = s;
-  document.getElementById('state').textContent = s === 'live' ? 'LIVE' : 'LABELING';
-  document.getElementById('capbtn').disabled = s !== 'live';
+function advance() {
+  // Next remaining unlabeled image after the one just handled, if any.
+  const next = unlabeled.find(n => n > current) ?? unlabeled[0] ?? null;
+  if (next !== null) { pick(next); } else { current = null; drawLab(); list(); }
 }
 
-function capture() {
-  fetch('/capture', { method: 'POST' }).then(() => {
-    boxes = []; setState('label'); list();
-    img.src = '/pending?' + Date.now();
+function saveLabels() {
+  if (current === null) return;
+  const out = boxes.map(b => ({ cls: b.cls,
+    cx: (b.x + b.w / 2) / lab.width, cy: (b.y + b.h / 2) / lab.height,
+    w: b.w / lab.width, h: b.h / lab.height }));
+  fetch('/label', { method: 'POST', body: JSON.stringify({ n: current, boxes: out }) })
+    .then(r => r.json()).then(() => refresh().then(advance));
+}
+
+function skip() { if (current !== null) advance(); }
+
+function delImg() {
+  if (current === null) return;
+  fetch('/delu', { method: 'POST', body: JSON.stringify({ n: current }) })
+    .then(() => refresh().then(advance));
+}
+
+function undo() { boxes.pop(); drawLab(); list(); }
+
+document.addEventListener('keydown', e => {
+  const typing = e.target.tagName === 'INPUT' && e.target.type !== 'text';
+  if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); snap(); }
+  if (e.code === 'Enter' && !typing && !e.target.closest('#tp')) saveLabels();
+});
+
+// ---- Lists, counts, resolution ----
+let unlabeled = [], labeled = [], uv = {}, lv = {};
+
+function refresh() {
+  return fetch('/info').then(r => r.json()).then(d => {
+    uv = {}; lv = {};
+    unlabeled = d.unlabeled.map(([n, v]) => (uv[n] = v, n));
+    labeled = d.labeled.map(([n, v]) => (lv[n] = v, n));
+    for (const id of ['ucount', 'ucount2']) document.getElementById(id).textContent = unlabeled.length;
+    for (const id of ['lcount', 'lcount2']) document.getElementById(id).textContent = labeled.length;
+    document.getElementById('res').textContent = d.cam[0] ? `${d.cam[0]}x${d.cam[1]}` : '?';
+    document.getElementById('pres').textContent =
+      d.cam[0] ? `${d.preview_width}x${Math.round(d.preview_width * d.cam[1] / d.cam[0])}` : `${d.preview_width}px`;
+    document.getElementById('uthumbs').innerHTML = unlabeled.length
+      ? unlabeled.map(n => `<img src="/thumb?src=u&n=${n}&v=${uv[n]}" data-n="${n}" onclick="pick(${n})" title="u${n}.jpg">`).join('')
+      : 'None yet. Snap some frames above.';
+    document.getElementById('lthumbs').innerHTML = labeled.length
+      ? labeled.map(n => `<img src="/thumb?src=l&n=${n}&v=${lv[n]}" onclick="showLabeled(${n})" title="img${n}.jpg">`).join('')
+      : 'None yet.';
+    savedCount = labeled.length;
+    estimate();
   });
 }
 
-function saveImg() {
-  if (mode !== 'label') return;
-  const out = boxes.map(b => ({ cls: b.cls,
-    cx: (b.x + b.w / 2) / c.width, cy: (b.y + b.h / 2) / c.height,
-    w: b.w / c.width, h: b.h / c.height }));
-  fetch('/save', { method: 'POST', body: JSON.stringify({ boxes: out }) })
-    .then(r => r.json()).then(d => {
-      savedCount = d.count;
-      document.getElementById('count').textContent = d.count;
-      estimate();
-      boxes = []; setState('live'); list();
-      // Preview what was just saved, straight from disk, in its own card.
-      openReview();
-    });
-}
-
-function discard() {
-  fetch('/discard', { method: 'POST' }).then(() => { boxes = []; setState('live'); list(); });
-}
-
-function undo() { boxes.pop(); draw(); list(); }
-
-// ---- Review saved images: separate card with its own canvas ----
+// ---- Labeled viewer ----
 const rc = document.getElementById('revcam'), rctx = rc.getContext('2d');
 const rimg = new Image();
-let revBoxes = [], imageNums = [], revIdx = 0, savedCount = 0;
-rimg.onload = drawReview;
-
-function drawReview() {
+let revBoxes = [];
+rimg.onload = () => {
   rctx.drawImage(rimg, 0, 0, rc.width, rc.height);
   rctx.font = '14px Helvetica'; rctx.lineWidth = 2; rctx.strokeStyle = '#FF0033';
   for (const b of revBoxes) {
@@ -191,45 +240,21 @@ function drawReview() {
     rctx.fillStyle = '#FFFFFF';
     rctx.fillText(b.cls, b.x + 5, b.y - 5);
   }
-}
+};
 
-function openReview() {
-  fetch('/images').then(r => r.json()).then(nums => {
-    imageNums = nums;
-    if (!nums.length) return;
-    document.getElementById('revcard').style.display = 'block';
-    document.getElementById('revbtn').textContent = 'Close review';
-    showReview(nums.length - 1);
-    document.getElementById('revcard').scrollIntoView({ behavior: 'smooth' });
-  });
-}
-
-function toggleReview() {
-  const card = document.getElementById('revcard');
-  if (card.style.display !== 'none') {
-    card.style.display = 'none';
-    document.getElementById('revbtn').textContent = 'Review';
-  } else {
-    openReview();
-  }
-}
-
-function showReview(i) {
-  revIdx = Math.max(0, Math.min(i, imageNums.length - 1));
-  const n = imageNums[revIdx];
+function showLabeled(n) {
   fetch('/label?n=' + n).then(r => r.json()).then(d => {
     revBoxes = d.boxes.map(b => ({ x: (b.cx - b.w / 2) * rc.width, y: (b.cy - b.h / 2) * rc.height,
                                    w: b.w * rc.width, h: b.h * rc.height, cls: b.cls }));
+    rc.style.display = 'block';
     const names = revBoxes.map(b => b.cls).join(', ');
-    document.getElementById('revinfo').textContent =
-      ` img${n} (${revIdx + 1} of ${imageNums.length})${names ? ': ' + names : ': no boxes'}`;
-    rimg.src = '/img?n=' + n;
+    document.getElementById('revinfo').textContent = `img${n}${names ? ': ' + names : ': no boxes'}`;
+    rimg.src = `/img?n=${n}&v=${lv[n]}`;
   });
 }
 
-function step(d) { showReview(revIdx + d); }
-
 // ---- Training parameters ----
+let savedCount = 0;
 const TP = [
   ['Model', 'model', 'yolov26n.pt', 'Which YOLO to start from. n is the smallest and fastest.'],
   ['Model', 'imgsz', 640, 'Training image size in pixels. Bigger sees more detail, trains slower.'],
@@ -290,12 +315,7 @@ function estimate() {
     `Jetson Orin Nano, yolov8 baseline. Scales with epochs, images, imgsz, model size.`;
 }
 
-fetch('/count').then(r => r.json()).then(d => {
-  savedCount = d.count;
-  document.getElementById('count').textContent = d.count;
-  estimate();
-});
-setState('live');
+refresh();
 </script>
 </body>
 </html>

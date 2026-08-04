@@ -34,6 +34,7 @@ if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
     mkdir -p "$DEST"
     cp "$SCRIPT_DIR/camlabel.py" "$SCRIPT_DIR/camlabel.html" "$SCRIPT_DIR/$SVC" \
        "$SCRIPT_DIR/setup.sh" "$DEST/"
+    [[ -f "$DEST/camlabel.yaml" ]] || cp "$SCRIPT_DIR/camlabel.yaml" "$DEST/"
 fi
 
 if ! cmp -s "$DEST/$SVC" "/etc/systemd/system/$SVC" 2>/dev/null; then

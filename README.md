@@ -15,16 +15,22 @@ Dashboard: `http://<car-ip>:8082`. Runs as neoracer-camlabel.service, starts on 
 
 ## Workflow
 
-1. The camera card shows the live feed. Capture freezes the frame.
-2. Click and drag on the image to box an object. The name typed in the class field goes into each box you drag. Undo box removes the last one.
-3. Save writes the image and labels to disk and opens the review card showing exactly what was saved. Discard returns to live.
-4. Review (top bar) opens a separate card for browsing all saved images with their boxes.
+Collection and labeling are separate stages:
+
+1. Collect: Snap (button or spacebar) saves the current full-resolution frame to the unlabeled pool. Take as many as you want, fast.
+2. Label: click any thumbnail in the unlabeled section. Drag boxes on it, the class field names each box, Enter or Save labels finishes it. The image moves from unlabeled to labeled and the next unlabeled image loads automatically. Skip moves on, Delete image throws a bad shot away, saving with no boxes makes a negative example.
+3. Labeled images show as thumbnails with a click-to-view of their boxes.
+
+## Settings
+
+`camlabel.yaml` next to the script sets the live-preview resolution and jpeg quality sent to the browser (saved images are always the full camera frame). Restart the service after editing. Camera and preview resolutions show in the top bar.
 
 ## Dataset
 
 Saved on the car in `~/camlabel/dataset/`:
 
-- `images/imgN.jpg`: the frame as captured, 640x480 JPEG, no boxes burned in
+- `unlabeled/uN.jpg`: collected frames waiting for labels (not part of the training set)
+- `images/imgN.jpg`: the frame as captured, full camera resolution JPEG, no boxes burned in
 - `labels/imgN.txt`: YOLO format, one line per box: `class_id cx cy w h`, normalized 0..1
 - `classes.txt`: one class name per line, id = line number
 - `train_params.txt`: training parameters saved from the dashboard

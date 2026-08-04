@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera Label Dashboard</title>
+<style>
+  /* Neobotics tokens, same scheme as the wallfollow dashboard. */
+  :root { --white: #FFFFFF; --halo: #F5F5F7; --steel: #E2E2E2; --carbon: #1D1D27; --tarmac: #1B2036; --red: #FF0033; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background: var(--white); color: var(--carbon); }
+  .topbar { background: var(--tarmac); color: var(--halo); padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; }
+  .topbar h1 { font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif; font-size: 1.3rem; }
+  .topbar button { background: transparent; border: 1px solid rgba(245, 245, 247, 0.5); color: var(--halo); font-family: inherit; padding: 0.4rem 1rem; border-radius: 6px; cursor: pointer; margin: 0; }
+  .topbar button:hover { background: rgba(245, 245, 247, 0.15); }
+  .meta { color: rgba(245, 245, 247, 0.72); font-size: 0.85rem; margin-top: 0.2rem; }
+  .meta b { color: var(--white); }
+  main { padding: 1rem 1.5rem; }
+  .grid { display: grid; grid-template-columns: 1fr 280px; gap: 1rem; }
+  @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--white); border: 1px solid var(--steel); border-radius: 12px; padding: 1rem; box-shadow: 0 6px 18px rgba(29, 29, 39, 0.08); }
+  .card h2 { font-family: 'Space Grotesk', 'Helvetica Neue', sans-serif; font-size: 1rem; color: var(--tarmac); margin-bottom: 0.5rem; }
+  canvas { background: var(--tarmac); border-radius: 6px; width: 100%; cursor: crosshair; }
+  label { display: block; color: rgba(29, 29, 39, 0.6); font-size: 0.8rem; margin-top: 0.6rem; }
+  input { width: 100%; background: var(--white); border: 1px solid var(--steel); color: var(--carbon); font-family: inherit; padding: 0.4rem; border-radius: 6px; font-size: 1rem; }
+  button { background: var(--white); border: 1px solid var(--tarmac); color: var(--tarmac); font-family: inherit; padding: 0.35rem 0.8rem; border-radius: 6px; margin: 0.8rem 0.4rem 0 0; cursor: pointer; }
+  button:hover { background: var(--steel); }
+  button.primary { background: var(--red); border-color: var(--red); color: var(--white); }
+  .readout { font-size: 0.85rem; margin-top: 0.6rem; white-space: pre-line; }
+  .desc { display: block; font-size: 0.72rem; color: rgba(29, 29, 39, 0.5); margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+<div>
+<h1>Camera Label Dashboard</h1>
+<div class="meta">state: <b id="state">LIVE</b> &bull; saved images: <b id="count">0</b></div>
+</div>
+<button id="revbtn" onclick="toggleReview()" title="Browse saved images with their boxes">Review</button>
+</div>
+<main>
+<div class="grid">
+  <div class="card">
+    <h2>Camera</h2>
+    <canvas id="cam" width="640" height="480"></canvas>
+  </div>
+  <div class="card">
+    <h2>Label</h2>
+    <label>class (typed name goes into each box you drag)
+      <input id="cls" type="text" placeholder="cone" value="">
+    </label>
+    <button class="primary" id="capbtn" onclick="capture()">Capture</button>
+    <button onclick="saveImg()">Save</button>
+    <button onclick="discard()">Discard</button>
+    <button onclick="undo()">Undo box</button>
+    <div class="readout" id="boxlist">Capture freezes the frame. Drag on the image to box an object.</div>
+  </div>
+</div>
+
+<div class="card" id="revcard" style="margin-top:1rem; display:none; border-color:#FF0033">
+  <h2>Saved images (review)
+    <button onclick="toggleReview()" style="float:right; margin:0">Close</button>
+  </h2>
+  <canvas id="revcam" width="640" height="480" style="max-width:520px; display:block; cursor:default"></canvas>
+  <button onclick="step(-1)">Prev</button>
+  <button onclick="step(1)">Next</button>
+  <span class="readout" id="revinfo"></span>
+</div>
+
+<div class="card" style="margin-top:1rem">
+  <h2>Training parameters (YOLO)</h2>
+  <div id="tp" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:0 1rem"></div>
+  <button onclick="saveParams()">Save params</button>
+  <div class="readout" id="estimate"></div>
+</div>
+</main>
+
+<script>
+const c = document.getElementById('cam'), ctx = c.getContext('2d');
+const img = new Image();
+let mode = 'live', boxes = [], drag = null;
+
+img.onload = draw;
+setInterval(() => { if (mode === 'live') img.src = '/frame?' + Date.now(); }, 100);
+
+function draw() {
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  ctx.font = '14px Helvetica'; ctx.lineWidth = 2; ctx.strokeStyle = '#FF0033';
+  for (const b of boxes) {
+    ctx.strokeRect(b.x, b.y, b.w, b.h);
+    ctx.fillStyle = '#FF0033';
+    ctx.fillRect(b.x, b.y - 18, ctx.measureText(b.cls).width + 10, 18);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(b.cls, b.x + 5, b.y - 5);
+  }
+  if (drag) { ctx.setLineDash([6, 4]); ctx.strokeRect(drag.x, drag.y, drag.w, drag.h); ctx.setLineDash([]); }
+}
+
+function pos(e) {
+  const r = c.getBoundingClientRect();
+  return [(e.clientX - r.left) * c.width / r.width, (e.clientY - r.top) * c.height / r.height];
+}
+c.onmousedown = e => {
+  if (mode !== 'label') return;
+  const [x, y] = pos(e);
+  drag = { x0: x, y0: y, x, y, w: 0, h: 0 };
+};
+c.onmousemove = e => {
+  if (!drag) return;
+  const [x, y] = pos(e);
+  drag.x = Math.min(x, drag.x0); drag.y = Math.min(y, drag.y0);
+  drag.w = Math.abs(x - drag.x0); drag.h = Math.abs(y - drag.y0);
+  draw();
+};
+c.onmouseup = () => {
+  if (!drag) return;
+  if (drag.w > 5 && drag.h > 5) {
+    boxes.push({ x: drag.x, y: drag.y, w: drag.w, h: drag.h,
+                 cls: document.getElementById('cls').value.trim() || 'unlabeled' });
+  }
+  drag = null; draw(); list();
+};
+
+function list() {
+  document.getElementById('boxlist').textContent = boxes.length
+    ? boxes.map((b, i) => `${i + 1}. ${b.cls}`).join('\n')
+    : 'Drag on the image to box an object.';
+}
+
+function setState(s) {
+  mode = s;
+  document.getElementById('state').textContent = s === 'live' ? 'LIVE' : 'LABELING';
+  document.getElementById('capbtn').disabled = s !== 'live';
+}
+
+function capture() {
+  fetch('/capture', { method: 'POST' }).then(() => {
+    boxes = []; setState('label'); list();
+    img.src = '/pending?' + Date.now();
+  });
+}
+
+function saveImg() {
+  if (mode !== 'label') return;
+  const out = boxes.map(b => ({ cls: b.cls,
+    cx: (b.x + b.w / 2) / c.width, cy: (b.y + b.h / 2) / c.height,
+    w: b.w / c.width, h: b.h / c.height }));
+  fetch('/save', { method: 'POST', body: JSON.stringify({ boxes: out }) })
+    .then(r => r.json()).then(d => {
+      savedCount = d.count;
+      document.getElementById('count').textContent = d.count;
+      estimate();
+      boxes = []; setState('live'); list();
+      // Preview what was just saved, straight from disk, in its own card.
+      openReview();
+    });
+}
+
+function discard() {
+  fetch('/discard', { method: 'POST' }).then(() => { boxes = []; setState('live'); list(); });
+}
+
+function undo() { boxes.pop(); draw(); list(); }
+
+// ---- Review saved images: separate card with its own canvas ----
+const rc = document.getElementById('revcam'), rctx = rc.getContext('2d');
+const rimg = new Image();
+let revBoxes = [], imageNums = [], revIdx = 0, savedCount = 0;
+rimg.onload = drawReview;
+
+function drawReview() {
+  rctx.drawImage(rimg, 0, 0, rc.width, rc.height);
+  rctx.font = '14px Helvetica'; rctx.lineWidth = 2; rctx.strokeStyle = '#FF0033';
+  for (const b of revBoxes) {
+    rctx.strokeRect(b.x, b.y, b.w, b.h);
+    rctx.fillStyle = '#FF0033';
+    rctx.fillRect(b.x, b.y - 18, rctx.measureText(b.cls).width + 10, 18);
+    rctx.fillStyle = '#FFFFFF';
+    rctx.fillText(b.cls, b.x + 5, b.y - 5);
+  }
+}
+
+function openReview() {
+  fetch('/images').then(r => r.json()).then(nums => {
+    imageNums = nums;
+    if (!nums.length) return;
+    document.getElementById('revcard').style.display = 'block';
+    document.getElementById('revbtn').textContent = 'Close review';
+    showReview(nums.length - 1);
+    document.getElementById('revcard').scrollIntoView({ behavior: 'smooth' });
+  });
+}
+
+function toggleReview() {
+  const card = document.getElementById('revcard');
+  if (card.style.display !== 'none') {
+    card.style.display = 'none';
+    document.getElementById('revbtn').textContent = 'Review';
+  } else {
+    openReview();
+  }
+}
+
+function showReview(i) {
+  revIdx = Math.max(0, Math.min(i, imageNums.length - 1));
+  const n = imageNums[revIdx];
+  fetch('/label?n=' + n).then(r => r.json()).then(d => {
+    revBoxes = d.boxes.map(b => ({ x: (b.cx - b.w / 2) * rc.width, y: (b.cy - b.h / 2) * rc.height,
+                                   w: b.w * rc.width, h: b.h * rc.height, cls: b.cls }));
+    const names = revBoxes.map(b => b.cls).join(', ');
+    document.getElementById('revinfo').textContent =
+      ` img${n} (${revIdx + 1} of ${imageNums.length})${names ? ': ' + names : ': no boxes'}`;
+    rimg.src = '/img?n=' + n;
+  });
+}
+
+function step(d) { showReview(revIdx + d); }
+
+// ---- Training parameters ----
+const TP = [
+  ['Model', 'model', 'yolov26n.pt', 'Which YOLO to start from. n is the smallest and fastest.'],
+  ['Model', 'imgsz', 640, 'Training image size in pixels. Bigger sees more detail, trains slower.'],
+  ['Training', 'epochs', 100, 'How many times training goes through the whole dataset.'],
+  ['Training', 'batch', 16, 'Images per training step. Lower this if memory runs out.'],
+  ['Training', 'patience', 50, 'Stop early after this many epochs with no improvement.'],
+  ['Learning rate', 'lr0', 0.01, 'Starting learning rate. How big each learning step is.'],
+  ['Learning rate', 'lrf', 0.01, 'Final learning rate, as a fraction of lr0.'],
+  ['Data split', 'train_split', 0.8, 'Fraction of images used for training.'],
+  ['Data split', 'test_split', 0.2, 'Fraction held back to test the model on.'],
+  ['Augmentation', 'fliplr', 0.5, 'Chance to mirror an image left to right.'],
+  ['Augmentation', 'flipud', 0.0, 'Chance to flip an image upside down.'],
+  ['Augmentation', 'degrees', 0.0, 'Largest random rotation, in degrees.'],
+  ['Augmentation', 'translate', 0.1, 'Largest random shift, as a fraction of the image.'],
+  ['Augmentation', 'scale', 0.5, 'Largest random zoom in or out.'],
+  ['Augmentation', 'mosaic', 1.0, 'Chance to stitch four images into one.'],
+  ['Augmentation', 'hsv_h', 0.015, 'Random hue shift. Changes colors slightly.'],
+  ['Augmentation', 'hsv_s', 0.7, 'Random saturation shift. Colors get stronger or washed out.'],
+  ['Augmentation', 'hsv_v', 0.4, 'Random brightness shift.'],
+];
+let tphtml = '', lastGroup = '';
+for (const [group, k, v, desc] of TP) {
+  if (group !== lastGroup) {
+    tphtml += `<h3 style="grid-column:1/-1; font-size:0.85rem; color:var(--tarmac); margin-top:0.8rem">${group}</h3>`;
+    lastGroup = group;
+  }
+  tphtml += `<label>${k}<input id="tp_${k}" type="${typeof v === 'number' ? 'number' : 'text'}"
+    step="any" value="${v}" oninput="estimate()"><span class="desc">${desc}</span></label>`;
+}
+document.getElementById('tp').innerHTML = tphtml;
+
+function saveParams() {
+  const out = {};
+  for (const [, k] of TP) {
+    const v = document.getElementById('tp_' + k).value;
+    out[k] = isNaN(parseFloat(v)) ? v : parseFloat(v);
+  }
+  fetch('/train_params', { method: 'POST', body: JSON.stringify(out) })
+    .then(() => { document.getElementById('estimate').textContent += '  [saved to dataset/train_params.txt]'; });
+}
+
+function estimate() {
+  // Rough wall-clock guess so students see the cost of their choices.
+  const g = k => parseFloat(document.getElementById('tp_' + k).value) || 0;
+  const tr = Math.round(savedCount * g('train_split'));
+  const te = savedCount - tr;
+  const model = document.getElementById('tp_model').value;
+  const mf = model.includes('s.') ? 2 : model.includes('m.') ? 4.5
+           : model.includes('l.') ? 8 : model.includes('x.') ? 13 : 1;
+  // Jetson Orin Nano baseline: about 25 imgs/s for a nano model at 640,
+  // plus about 10 s of fixed cost per epoch (validation pass, dataloader).
+  const ips = 25 / mf / Math.pow((g('imgsz') || 640) / 640, 2);
+  const sec = g('epochs') * (Math.max(tr, 1) / ips + 10) + 120;
+  const t = sec < 120 ? Math.round(sec) + ' s'
+          : sec < 7200 ? Math.round(sec / 60) + ' min' : (sec / 3600).toFixed(1) + ' h';
+  document.getElementById('estimate').textContent =
+    `${tr} train / ${te} test images. Rough training time: about ${t} on a ` +
+    `Jetson Orin Nano, yolov8 baseline. Scales with epochs, images, imgsz, model size.`;
+}
+
+fetch('/count').then(r => r.json()).then(d => {
+  savedCount = d.count;
+  document.getElementById('count').textContent = d.count;
+  estimate();
+});
+setState('live');
+</script>
+</body>
+</html>

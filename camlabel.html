@@ -82,7 +82,19 @@ const img = new Image();
 let mode = 'live', boxes = [], drag = null;
 
 img.onload = draw;
-setInterval(() => { if (mode === 'live') img.src = '/frame?' + Date.now(); }, 100);
+// Pull frames one at a time: the next request goes out only after the
+// previous one lands, so a congested WiFi link degrades to a lower frame
+// rate instead of a request pile-up. Pauses when the tab is hidden.
+(function liveLoop() {
+  if (mode !== 'live' || document.hidden) { setTimeout(liveLoop, 250); return; }
+  const t = Date.now();
+  const done = () => {
+    img.removeEventListener('load', done); img.removeEventListener('error', done);
+    setTimeout(liveLoop, Math.max(20, 120 - (Date.now() - t)));
+  };
+  img.addEventListener('load', done); img.addEventListener('error', done);
+  img.src = '/frame?' + t;
+})();
 
 function draw() {
   ctx.drawImage(img, 0, 0, c.width, c.height);

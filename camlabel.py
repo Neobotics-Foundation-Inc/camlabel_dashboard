@@ -28,6 +28,7 @@ LABELS = DATASET / 'labels'
 
 _lock = threading.Lock()
 _live = b''
+_preview = b''
 _pending = b''
 
 
@@ -37,19 +38,28 @@ class CameraNode(Node):
         self.create_subscription(Image, '/camera', self._cb, qos_profile_sensor_data)
 
     def _cb(self, msg):
-        global _live
+        global _live, _preview
+        import cv2
+        import numpy as np
         if msg.encoding == 'jpeg':
             data = bytes(msg.data)
+            arr = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
         else:
             # Raw frame fallback for other camera drivers.
-            import cv2
-            import numpy as np
             arr = np.frombuffer(msg.data, dtype=np.uint8).reshape(msg.height, msg.width, -1)
             if msg.encoding == 'rgb8':
                 arr = cv2.cvtColor(arr, cv2.COLOR_RGB2BGR)
             data = cv2.imencode('.jpg', arr)[1].tobytes()
+        # The live view streams a small low-quality preview (about 10 KB vs
+        # 70 KB) so many cars and laptops fit in the shared WiFi airtime.
+        # Capture and the saved dataset keep the full-resolution frame.
+        prev = data
+        if arr is not None:
+            small = cv2.resize(arr, (320, 240))
+            prev = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 55])[1].tobytes()
         with _lock:
             _live = data
+            _preview = prev
 
 
 def _img_number(name):
@@ -74,7 +84,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send((BASE / 'camlabel.html').read_bytes(), 'text/html; charset=utf-8')
         elif self.path.startswith('/frame'):
             with _lock:
-                data = _live
+                data = _preview
             if data:
                 self._send(data, 'image/jpeg')
             else:

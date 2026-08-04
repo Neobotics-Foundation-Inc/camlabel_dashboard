@@ -43,7 +43,7 @@
 <div class="grid">
   <div class="card">
     <h2>Camera</h2>
-    <canvas id="cam" width="640" height="480"></canvas>
+    <canvas id="cam" width="640" height="480" style="max-width:440px; display:block"></canvas>
   </div>
   <div class="card">
     <h2>Label</h2>
@@ -62,7 +62,7 @@
   <h2>Saved images (review)
     <button onclick="toggleReview()" style="float:right; margin:0">Close</button>
   </h2>
-  <canvas id="revcam" width="640" height="480" style="max-width:520px; display:block; cursor:default"></canvas>
+  <canvas id="revcam" width="640" height="480" style="max-width:440px; display:block; cursor:default"></canvas>
   <button onclick="step(-1)">Prev</button>
   <button onclick="step(1)">Next</button>
   <span class="readout" id="revinfo"></span>

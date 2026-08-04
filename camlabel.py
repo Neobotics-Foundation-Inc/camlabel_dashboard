@@ -218,6 +218,13 @@ class Handler(BaseHTTPRequestHandler):
                          for b in req['boxes']]
                 (LABELS / f'img{m}.txt').write_text('\n'.join(lines) + '\n' if lines else '')
             self._send(json.dumps({'img': m}).encode(), 'application/json')
+        elif self.path == '/dell':
+            req = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            n = int(req['n'])
+            for f in (IMAGES / f'img{n}.jpg', LABELS / f'img{n}.txt'):
+                if f.is_file():
+                    f.unlink()
+            self._send(b'ok', 'text/plain')
         elif self.path == '/delu':
             req = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
             f = UNLABELED / f'u{int(req["n"])}.jpg'

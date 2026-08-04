@@ -90,7 +90,7 @@ img.onload = draw;
   const t = Date.now();
   const done = () => {
     img.removeEventListener('load', done); img.removeEventListener('error', done);
-    setTimeout(liveLoop, Math.max(20, 120 - (Date.now() - t)));
+    setTimeout(liveLoop, Math.max(20, 160 - (Date.now() - t)));
   };
   img.addEventListener('load', done); img.addEventListener('error', done);
   img.src = '/frame?' + t;

@@ -56,7 +56,7 @@ class CameraNode(Node):
         prev = data
         if arr is not None:
             small = cv2.resize(arr, (320, 240))
-            prev = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 55])[1].tobytes()
+            prev = cv2.imencode('.jpg', small, [cv2.IMWRITE_JPEG_QUALITY, 45])[1].tobytes()
         with _lock:
             _live = data
             _preview = prev
@@ -79,6 +79,9 @@ def _class_id(name):
 
 
 class Handler(BaseHTTPRequestHandler):
+    # Keep-alive: reuse one TCP connection per viewer instead of a new
+    # handshake per frame. Matters a lot on congested WiFi.
+    protocol_version = 'HTTP/1.1'
     def do_GET(self):
         if self.path == '/':
             self._send((BASE / 'camlabel.html').read_bytes(), 'text/html; charset=utf-8')

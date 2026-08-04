@@ -18,7 +18,7 @@ Dashboard: `http://<car-ip>:8082`. Runs as neoracer-camlabel.service, starts on 
 Collection and labeling are separate stages:
 
 1. Collect: Snap (button or spacebar) saves the current full-resolution frame to the unlabeled pool. Take as many as you want, fast.
-2. Label: click any thumbnail in the unlabeled section. Drag boxes on it, the class field names each box, Enter or Save labels finishes it. The image moves from unlabeled to labeled and the next unlabeled image loads automatically. Skip moves on, Delete image throws a bad shot away, saving with no boxes makes a negative example.
+2. Label: click any thumbnail in the unlabeled section. Drag boxes on it, the class field names each box, Enter or Save labels finishes it. The image moves from unlabeled to labeled and the next unlabeled image loads automatically. Prev, Next, or the arrow keys move through the unlabeled images. Delete image throws a bad shot away, saving with no boxes makes a negative example.
 3. Labeled images show as thumbnails with a click-to-view of their boxes.
 
 ## Settings

@@ -55,11 +55,12 @@
     <label>class (typed name goes into each box you drag)
       <input id="cls" type="text" placeholder="cone" value="">
     </label>
+    <button onclick="nav(-1)">Prev</button>
+    <button onclick="nav(1)">Next</button>
     <button class="primary" onclick="saveLabels()">Save labels</button>
-    <button onclick="skip()">Skip</button>
     <button onclick="delImg()">Delete image</button>
     <button onclick="undo()">Undo box</button>
-    <div class="readout" id="boxlist">Click an unlabeled image below to start. Enter saves.</div>
+    <div class="readout" id="boxlist">Click an unlabeled image below to start. Arrow keys move, Enter saves.</div>
   </div>
 </div>
 
@@ -102,9 +103,16 @@ limg.onload = () => camx.drawImage(limg, 0, 0, cam.width, cam.height);
 })();
 
 function snap() {
-  fetch('/snap', { method: 'POST' }).then(r => r.json()).then(d => {
+  fetch('/snap', { method: 'POST' }).then(r => {
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  }).then(d => {
     document.getElementById('snapinfo').textContent = `Saved u${d.n}.jpg`;
     refresh();
+  }).catch(err => {
+    document.getElementById('snapinfo').textContent =
+      `Snap failed (${err.message}). 503 means no camera frame yet; ` +
+      `404 means the service is running old code and needs a restart.`;
   });
 }
 
@@ -113,6 +121,7 @@ const lab = document.getElementById('lab'), labx = lab.getContext('2d');
 const uimg = new Image();
 let current = null, boxes = [], drag = null;
 uimg.onload = drawLab;
+uimg.onerror = () => { if (current !== null) refresh().then(advance); };
 
 function drawLab() {
   labx.clearRect(0, 0, lab.width, lab.height);
@@ -171,6 +180,14 @@ function list() {
       : `u${current}: drag to box an object, or Save with no boxes for a negative.`;
 }
 
+function nav(d) {
+  if (!unlabeled.length) return;
+  const i = unlabeled.indexOf(current);
+  const j = i === -1 ? (d > 0 ? 0 : unlabeled.length - 1)
+                     : (i + d + unlabeled.length) % unlabeled.length;
+  pick(unlabeled[j]);
+}
+
 function advance() {
   // Next remaining unlabeled image after the one just handled, if any.
   const next = unlabeled.find(n => n > current) ?? unlabeled[0] ?? null;
@@ -183,10 +200,11 @@ function saveLabels() {
     cx: (b.x + b.w / 2) / lab.width, cy: (b.y + b.h / 2) / lab.height,
     w: b.w / lab.width, h: b.h / lab.height }));
   fetch('/label', { method: 'POST', body: JSON.stringify({ n: current, boxes: out }) })
-    .then(r => r.json()).then(() => refresh().then(advance));
+    .then(() => refresh().then(advance))
+    .catch(() => refresh().then(advance));
 }
 
-function skip() { if (current !== null) advance(); }
+
 
 function delImg() {
   if (current === null) return;
@@ -197,9 +215,11 @@ function delImg() {
 function undo() { boxes.pop(); drawLab(); list(); }
 
 document.addEventListener('keydown', e => {
-  const typing = e.target.tagName === 'INPUT' && e.target.type !== 'text';
-  if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); snap(); }
-  if (e.code === 'Enter' && !typing && !e.target.closest('#tp')) saveLabels();
+  const onBody = e.target === document.body;
+  if (e.code === 'Space' && onBody) { e.preventDefault(); snap(); }
+  if (e.code === 'Enter' && (onBody || e.target.id === 'cls')) saveLabels();
+  if (e.code === 'ArrowLeft' && onBody) nav(-1);
+  if (e.code === 'ArrowRight' && onBody) nav(1);
 });
 
 // ---- Lists, counts, resolution ----
@@ -221,6 +241,9 @@ function refresh() {
     document.getElementById('lthumbs').innerHTML = labeled.length
       ? labeled.map(n => `<img src="/thumb?src=l&n=${n}&v=${lv[n]}" onclick="showLabeled(${n})" title="img${n}.jpg">`).join('')
       : 'None yet.';
+    for (const el of document.querySelectorAll('#uthumbs img')) {
+      el.classList.toggle('sel', el.dataset.n == current);
+    }
     savedCount = labeled.length;
     estimate();
   });

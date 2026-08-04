@@ -5,7 +5,7 @@
 #   scp -r neoracer_camlabel racecar@<car-ip>:~/camlabel
 #   ssh racecar@<car-ip> 'bash ~/camlabel/setup.sh'
 #
-# Installs racecar-camlabel.service, enables it at boot, and starts it.
+# Installs neoracer-camlabel.service, enables it at boot, and starts it.
 # Dashboard comes up at http://<car-ip>:8082. Idempotent: safe to re-run.
 #
 # Needs nothing beyond the stock image: ROS Humble at /opt/ros/humble, the

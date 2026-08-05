@@ -2,6 +2,15 @@
 
 Image capture and labeling as a service for the Neoracer, on port 8082. Students capture frames from the car's camera, drag boxes on them, and the dashboard saves a YOLO-ready dataset for model training.
 
+## Contents
+
+- [Install](#install)
+- [Service control](#service-control)
+- [Workflow](#workflow)
+- [Settings](#settings)
+- [Dataset](#dataset)
+- [Training parameters](#training-parameters)
+
 ## Install
 
 From a laptop on the car's network:
@@ -12,6 +21,22 @@ ssh racecar@<car-ip> 'bash ~/camlabel/setup.sh'
 ```
 
 Dashboard: `http://<car-ip>:8082`. Runs as neoracer-camlabel.service, starts on boot.
+
+## Service control
+
+Run on the car, from `~/camlabel`:
+
+| Command | Effect |
+| --- | --- |
+| `bash setup.sh` | install or update files and unit, then start |
+| `bash setup.sh restart` | restart; takes port 8082 back first |
+| `bash setup.sh remove` | stop, disable, and uninstall the unit; keeps the dataset |
+| `bash setup.sh disable` | stop and keep off across boots |
+| `bash setup.sh enable` | turn back on and start |
+
+Install, restart, and enable clear port 8082 before starting. A dashboard left over from an earlier install under a different unit name, or any other service on 8082, is stopped through systemd; a `camlabel.py` started by hand is signalled directly. Without this the new instance would fail to bind and loop on `Restart=on-failure`.
+
+After `remove`, `~/camlabel` and `~/camlabel/dataset/` stay in place; `bash setup.sh` reinstalls.
 
 ## Workflow
 

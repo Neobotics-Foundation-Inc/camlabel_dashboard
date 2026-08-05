@@ -36,7 +36,7 @@ Run on the car, from `~/camlabel`:
 
 Install, restart, and enable clear port 8082 before starting. A dashboard left over from an earlier install under a different unit name, or any other service on 8082, is stopped through systemd; a `camlabel.py` started by hand is signalled directly. Without this the new instance would fail to bind and loop on `Restart=on-failure`.
 
-After `remove`, `~/camlabel` and `~/camlabel/dataset/` stay in place; `bash setup.sh` reinstalls.
+After `remove`, `~/camlabel` and the dataset in `~/data/camlabel/` stay in place; `bash setup.sh` reinstalls.
 
 ## Workflow
 
@@ -52,7 +52,7 @@ Collection and labeling are separate stages:
 
 ## Dataset
 
-Saved on the car in `~/camlabel/dataset/`:
+Saved on the car in `~/data/camlabel/`, outside the code directory, so reinstalling or re-cloning camlabel leaves it alone. The tree is created at startup when missing:
 
 - `unlabeled/uN.jpg`: collected frames waiting for labels (not part of the training set)
 - `images/imgN.jpg`: the frame as captured, full camera resolution JPEG, no boxes burned in
@@ -62,6 +62,8 @@ Saved on the car in `~/camlabel/dataset/`:
 
 This layout trains directly with ultralytics by pointing a data.yaml at it.
 
+A dataset from an install that kept it in `~/camlabel/dataset/` moves across on the next `bash setup.sh`. If `~/data/camlabel/` already holds files, the old directory is left untouched and reported instead, since image numbers from two datasets would collide.
+
 ## Training parameters
 
-The bottom card holds the common YOLO parameters (model, epochs, batch, image size, learning rate, splits, augmentations), each with a short description. Save params writes them to `dataset/train_params.txt`. A rough training time estimate for a Jetson Orin Nano updates live as values change.
+The bottom card holds the common YOLO parameters (model, epochs, batch, image size, learning rate, splits, augmentations), each with a short description. Save params writes them to `~/data/camlabel/train_params.txt`. A rough training time estimate for a Jetson Orin Nano updates live as values change.

@@ -2,10 +2,12 @@
 """Neoracer camera label dashboard: collect frames, then label them, YOLO out.
 
 Two-stage workflow on port 8082 (stdlib HTTP + rclpy, wallfollow pattern):
-  Collect: Snap saves the current camera frame to dataset/unlabeled/.
+  Collect: Snap saves the current camera frame to unlabeled/.
   Label:   pick an unlabeled image, drag boxes, save. The file moves to
-           dataset/images/ with a YOLO label file in dataset/labels/
-           (class_id cx cy w h, normalized) and classes.txt stays in sync.
+           images/ with a YOLO label file in labels/ (class_id cx cy w h,
+           normalized) and classes.txt stays in sync.
+
+Everything is written under ~/data/camlabel, created at startup when absent.
 
 camlabel.yaml sets the live-preview resolution sent to the browser. Saved
 images are always the full camera frame. Thumbnails, immutable file names
@@ -29,7 +31,9 @@ import yaml
 
 PORT = 8082
 BASE = Path(__file__).resolve().parent
-DATASET = BASE / 'dataset'
+# Dataset lives outside the code tree, so reinstalling or re-cloning camlabel
+# never touches collected frames or labels.
+DATASET = Path.home() / 'data' / 'camlabel'
 UNLABELED = DATASET / 'unlabeled'
 IMAGES = DATASET / 'images'
 LABELS = DATASET / 'labels'
@@ -198,7 +202,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(503)
                 return
             with _fs_lock:
-                UNLABELED.mkdir(parents=True, exist_ok=True)
+                _ensure_dataset()
                 n = _next_unlabeled_number()
                 (UNLABELED / f'u{n}.jpg').write_bytes(data)
             self._send(json.dumps({'n': n}).encode(), 'application/json')
@@ -209,8 +213,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_error(404)
                 return
             with _fs_lock:
-                IMAGES.mkdir(parents=True, exist_ok=True)
-                LABELS.mkdir(parents=True, exist_ok=True)
+                _ensure_dataset()
                 m = max(_nums(IMAGES, 'img*.jpg'), default=0) + 1
                 src.rename(IMAGES / f'img{m}.jpg')
                 lines = [f'{_class_id(b["cls"])} '
@@ -233,7 +236,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(b'ok', 'text/plain')
         elif self.path == '/train_params':
             params = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            DATASET.mkdir(parents=True, exist_ok=True)
+            _ensure_dataset()
             lines = [f'{k}: {v}' for k, v in params.items()]
             (DATASET / 'train_params.txt').write_text('\n'.join(lines) + '\n')
             self._send(b'ok', 'text/plain')
@@ -259,12 +262,18 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
 
+def _ensure_dataset():
+    for d in (UNLABELED, IMAGES, LABELS):
+        d.mkdir(parents=True, exist_ok=True)
+
+
 def main():
+    _ensure_dataset()
     rclpy.init()
     node = CameraNode()
     threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
     print(f'Camera label dashboard on http://0.0.0.0:{PORT} '
-          f'(preview {_cfg["preview_width"]}px)')
+          f'(preview {_cfg["preview_width"]}px, dataset {DATASET})')
     ThreadingHTTPServer(('0.0.0.0', PORT), Handler).serve_forever()
 
 

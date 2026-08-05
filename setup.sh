@@ -8,6 +8,9 @@
 # Installs neoracer-camlabel.service, enables it at boot, and starts it.
 # Dashboard comes up at http://<car-ip>:8082. Idempotent: safe to re-run.
 #
+# The dataset lives at ~/data/camlabel, outside this directory. An older
+# install that kept it in ~/camlabel/dataset has it moved on the next run.
+#
 # Subcommands:
 #   (none)    install or update, then start
 #   restart   restart the service, taking port 8082 back first
@@ -21,8 +24,38 @@ set -eo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEST=/home/racecar/camlabel
+DATA=/home/racecar/data/camlabel
 SVC=neoracer-camlabel.service
 PORT=8082
+
+# Dataset tree at $DATA, plus a one-time move of a dataset left inside $DEST by
+# an install from before the move. Re-running finds the tree in place and the
+# old directory gone, so it does nothing. A dataset already at $DATA is never
+# merged with an old one: image numbers would collide.
+setup_data() {
+    local old="$DEST/dataset" sub f
+    mkdir -p "$DATA/unlabeled" "$DATA/images" "$DATA/labels"
+    [[ -d "$old" ]] || return 0
+    if [[ -n "$(find "$DATA" -type f -print -quit)" ]]; then
+        echo "  dataset kept at $DATA; $old left in place, merge it by hand"
+        return 0
+    fi
+    for sub in unlabeled images labels; do
+        [[ -d "$old/$sub" ]] || continue
+        find "$old/$sub" -mindepth 1 -maxdepth 1 -exec mv -n -t "$DATA/$sub" {} +
+        rmdir "$old/$sub" 2>/dev/null || true
+    done
+    for f in ucounter classes.txt train_params.txt; do
+        if [[ -f "$old/$f" ]]; then
+            mv -n "$old/$f" "$DATA/$f"
+        fi
+    done
+    if rmdir "$old" 2>/dev/null; then
+        echo "  dataset moved from $old to $DATA"
+    else
+        echo "  dataset moved to $DATA; $old still holds other files"
+    fi
+}
 
 # PIDs listening on $PORT. Unprivileged ss names only our own processes, so
 # fall back to sudo when a listener exists but its owner stays hidden.
@@ -112,7 +145,7 @@ case "${1:-}" in
         sudo rm -f "/etc/systemd/system/$SVC"
         sudo systemctl daemon-reload
         sudo systemctl reset-failed "$SVC" 2>/dev/null || true
-        echo "$SVC removed. Files in $DEST and the dataset are untouched."
+        echo "$SVC removed. Files in $DEST and the dataset in $DATA are untouched."
         echo "Reinstall with: bash setup.sh"
         exit 0
         ;;
@@ -131,6 +164,8 @@ if [[ "$SCRIPT_DIR" != "$DEST" ]]; then
        "$SCRIPT_DIR/setup.sh" "$DEST/"
     [[ -f "$DEST/camlabel.yaml" ]] || cp "$SCRIPT_DIR/camlabel.yaml" "$DEST/"
 fi
+
+setup_data
 
 if ! cmp -s "$DEST/$SVC" "/etc/systemd/system/$SVC" 2>/dev/null; then
     sudo install -m 0644 "$DEST/$SVC" "/etc/systemd/system/$SVC"

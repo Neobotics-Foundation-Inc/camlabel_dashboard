@@ -53,7 +53,7 @@ except OSError:
 class CameraNode(Node):
     def __init__(self):
         super().__init__('camlabel')
-        self.create_subscription(Image, '/camera', self._cb, qos_profile_sensor_data)
+        self.create_subscription(Image, '/camera/color', self._cb, qos_profile_sensor_data)
 
     def _cb(self, msg):
         global _live, _preview, _cam_res

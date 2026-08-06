@@ -13,30 +13,32 @@ Image capture and labeling as a service for the Neoracer, on port 8082. Students
 
 ## Install
 
-From a laptop on the car's network:
+On the car:
 
 ```
-scp -r neoracer_camlabel racecar@<car-ip>:~/camlabel
-ssh racecar@<car-ip> 'bash ~/camlabel/setup.sh'
+git clone https://github.com/Neobotics-Foundation-Inc/camlabel_dashboard.git
+bash camlabel_dashboard/setup.sh
 ```
 
-Dashboard: `http://<car-ip>:8082`. Runs as neoracer-camlabel.service, starts on boot.
+setup.sh points neoracer-camlabel.service at this checkout wherever it sits and copies nothing, so the repository can live anywhere the racecar user can read. A first install leaves the service stopped and disabled; start it with `bash setup.sh enable`. Dashboard: `http://<car-ip>:8082`.
+
+Re-running setup.sh updates the unit and leaves the enable state alone: a running service restarts on the new code, a stopped one stays stopped.
 
 ## Service control
 
-Run on the car, from `~/camlabel`:
+Run on the car, from the checkout:
 
 | Command | Effect |
 | --- | --- |
-| `bash setup.sh` | install or update files and unit, then start |
+| `bash setup.sh` | install or update the unit; a first install does not start it |
+| `bash setup.sh enable` | start now and at every boot |
+| `bash setup.sh disable` | stop now and keep off across boots |
 | `bash setup.sh restart` | restart; takes port 8082 back first |
 | `bash setup.sh remove` | stop, disable, and uninstall the unit; keeps the dataset |
-| `bash setup.sh disable` | stop and keep off across boots |
-| `bash setup.sh enable` | turn back on and start |
 
-Install, restart, and enable clear port 8082 before starting. A dashboard left over from an earlier install under a different unit name, or any other service on 8082, is stopped through systemd; a `camlabel.py` started by hand is signalled directly. Without this the new instance would fail to bind and loop on `Restart=on-failure`.
+Enable, restart, and an update of a running service clear port 8082 first. A dashboard left over from an earlier install under a different unit name or directory, or any other service on 8082, is stopped through systemd; a `camlabel.py` started by hand is signalled directly. Without this the new instance would fail to bind and loop on `Restart=on-failure`.
 
-After `remove`, `~/camlabel` and the dataset in `~/data/camlabel/` stay in place; `bash setup.sh` reinstalls.
+After `remove`, the checkout and the dataset in `~/data/camlabel/` stay in place; `bash setup.sh` reinstalls.
 
 ## Workflow
 
@@ -62,7 +64,7 @@ Saved on the car in `~/data/camlabel/`, outside the code directory, so reinstall
 
 This layout trains directly with ultralytics by pointing a data.yaml at it.
 
-A dataset from an install that kept it in `~/camlabel/dataset/` moves across on the next `bash setup.sh`. If `~/data/camlabel/` already holds files, the old directory is left untouched and reported instead, since image numbers from two datasets would collide.
+A dataset from an install that kept it in a `dataset/` directory inside the checkout moves across on the next `bash setup.sh`. If `~/data/camlabel/` already holds files, the old directory is left untouched and reported instead, since image numbers from two datasets would collide.
 
 ## Training parameters
 

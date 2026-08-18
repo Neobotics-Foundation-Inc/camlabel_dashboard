@@ -236,12 +236,6 @@ class Handler(BaseHTTPRequestHandler):
             if f.is_file():
                 f.unlink()
             self._send(b'ok', 'text/plain')
-        elif self.path == '/train_params':
-            params = json.loads(self.rfile.read(int(self.headers['Content-Length'])))
-            _ensure_dataset()
-            lines = [f'{k}: {v}' for k, v in params.items()]
-            (DATASET / 'train_params.txt').write_text('\n'.join(lines) + '\n')
-            self._send(b'ok', 'text/plain')
         else:
             self.send_error(404)
 

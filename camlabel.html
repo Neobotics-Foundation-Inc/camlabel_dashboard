@@ -224,7 +224,7 @@
   @media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
   main > .card + .card { margin-top: 16px; }
   canvas { max-width: 460px; }
-  #lab { cursor: crosshair; }
+  #lab { cursor: crosshair; touch-action: none; }
   #cls {
     width: 100%;
     margin-top: 4px;
@@ -256,49 +256,6 @@
   }
   .thumbs img:hover { border-color: var(--btn-border); }
   .thumbs img.sel { border-color: var(--nb-red); }
-  /* Info circles in the header. Hover shows the note; a click pins it,
-     which is what a touch screen needs. */
-  .info {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 13px;
-    height: 13px;
-    margin-left: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.42);
-    border-radius: 50%;
-    font-size: 9px;
-    font-style: normal;
-    font-weight: 700;
-    letter-spacing: 0;
-    color: rgba(255, 255, 255, 0.75);
-    cursor: help;
-    user-select: none;
-  }
-  .info:hover { border-color: var(--nb-red); background: var(--nb-red); color: var(--nb-white); }
-  .info .tip {
-    display: none;
-    position: absolute;
-    top: 20px;
-    right: -6px;
-    width: 252px;
-    padding: 10px 12px;
-    background: var(--card);
-    color: var(--ink);
-    border: 1px solid var(--line);
-    border-top: 2px solid var(--nb-red);
-    border-radius: 9px;
-    box-shadow: var(--shadow-card-lg);
-    font-family: var(--body-font);
-    font-size: 0.72rem;
-    font-weight: 400;
-    line-height: 1.5;
-    letter-spacing: normal;
-    text-transform: none;
-    z-index: 40;
-  }
-  .info:hover .tip, .info.open .tip { display: block; }
 
   .lead-note {
     font-size: 0.78rem;
@@ -319,6 +276,117 @@
     font-weight: 700;
     margin-right: 2px;
   }
+
+  /* ── Info circle ────────────────────────────────────────────────
+     Hover reads it; a tap pins it, which is what a touch screen needs. */
+  .info {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 5px;
+    border: 1px solid currentColor;
+    border-radius: 50%;
+    font-family: var(--body-font);
+    font-size: 10px;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0;
+    text-transform: none;
+    opacity: 0.75;
+    cursor: help;
+    user-select: none;
+    flex: none;
+  }
+  .info:hover, .info.open { opacity: 1; border-color: var(--nb-red); color: var(--nb-red); }
+  .info .tip {
+    display: none;
+    position: absolute;
+    top: 21px;
+    right: -6px;
+    width: 250px;
+    padding: 10px 12px;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-top: 2px solid var(--nb-red);
+    border-radius: 9px;
+    box-shadow: var(--shadow-card-lg);
+    font-family: var(--body-font);
+    font-size: 0.75rem;
+    font-style: normal;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: left;
+    white-space: normal;
+    z-index: 60;
+  }
+  .info:hover .tip, .info.open .tip { display: block; }
+
+  /* ── Toast: says what happened after Save or Load ─────────────── */
+  #toast {
+    position: fixed;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%) translateY(14px);
+    background: var(--nb-blue);
+    color: var(--nb-white);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-left: 3px solid var(--nb-red);
+    border-radius: 9px;
+    padding: 10px 16px;
+    font-family: var(--body-font);
+    font-size: 0.82rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 160ms ease-out, transform 160ms ease-out;
+    z-index: 90;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* A quiet note under a tune panel. */
+  .apply-note {
+    font-size: 0.72rem;
+    line-height: 1.45;
+    color: var(--ink-muted);
+    margin-top: 10px;
+    padding-left: 9px;
+    border-left: 2px solid var(--nb-red);
+  }
+
+  /* ── Phone and tablet ──────────────────────────────────────────── */
+  @media (max-width: 900px) {
+    header { padding: 10px 14px; gap: 10px; }
+    header img.logo { height: 32px; }
+    header h1 { font-size: 0.8rem; }
+    .stats { gap: 12px; width: 100%; margin-left: 0; }
+    .stat i { font-size: 0.56rem; }
+    .stat b { font-size: 0.82rem; }
+    main { padding: 14px 14px 24px; }
+    .grid { grid-template-columns: 1fr; gap: 12px; }
+    .card { padding: 12px 13px; }
+    canvas { max-width: 100%; }
+    .info .tip { width: min(250px, 74vw); }
+  }
+  @media (max-width: 560px) {
+    header h1 .thin { display: block; }
+    .btn { padding: 8px 13px; font-size: 0.8rem; }
+    .actions { gap: 7px; }
+    .info { width: 16px; height: 16px; font-size: 11px; }
+    .info .tip { right: auto; left: -8px; }
+  }
+  /* Touch pointers get bigger targets than a mouse needs. */
+  @media (pointer: coarse) {
+    .btn { min-height: 38px; }
+    select { min-height: 38px; }
+    #form input, #init input, #hp input { min-height: 36px; font-size: 16px; }
+  }
 </style>
 <script>
   /* Applied before first paint, so a dark session never flashes white. */
@@ -335,6 +403,30 @@
     localStorage.setItem("wf-theme", el.dataset.theme);
   }
 </script>
+
+<script>
+  /* Confirms Save and Load, so an unsaved tune is never a guess. */
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    if (!t) {
+      t = document.createElement('div');
+      t.id = 'toast';
+      document.body.appendChild(t);
+    }
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(window.__toastTimer);
+    window.__toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2200);
+  }
+  /* One open tip at a time, and a tap outside closes it. */
+  document.addEventListener('click', function (e) {
+    var hit = e.target.closest ? e.target.closest('.info') : null;
+    document.querySelectorAll('.info.open').forEach(function (el) {
+      if (el !== hit) el.classList.remove('open');
+    });
+    if (hit) hit.classList.toggle('open');
+  });
+</script>
 </head>
 <body>
 
@@ -345,8 +437,8 @@
   <div class="stats">
     <span class="stat"><i>unlabeled</i><b id="ucount">0</b></span>
     <span class="stat"><i>labeled</i><b id="lcount">0</b></span>
-    <span class="stat"><i>camera<span class="info" onclick="this.classList.toggle('open')">i<span class="tip">The size of the frames the camera itself publishes. <b>Snap saves at this resolution</b>.</span></span></i><b id="res">?</b></span>
-    <span class="stat"><i>preview<span class="info" onclick="this.classList.toggle('open')">i<span class="tip">The size of the live view streamed to this browser, set by <b>preview_width</b> in camlabel.yaml. It never changes what gets saved.</span></span></i><b id="pres">?</b></span>
+    <span class="stat"><i>camera<span class="info">i<span class="tip">The size of the frames the camera sends. Snap saves at this size, so this is the resolution your dataset ends up in.</span></span></i><b id="res">?</b></span>
+    <span class="stat"><i>preview<span class="info">i<span class="tip">The size of the live picture shown on this page. It is shrunk before being sent so the page keeps up over WiFi. Changing it does not change the saved images. Set it with preview_width in camlabel.yaml.</span></span></i><b id="pres">?</b></span>
     <button class="btn theme-btn" onclick="toggleTheme()" title="Switch between light and dark"></button>
   </div>
 </header>
@@ -364,9 +456,9 @@
   </section>
   <section class="card">
     <div class="card-title"><span class="step">2</span>Label</div>
-    <div class="lead-note">Type the class name first, then drag a box around each object.</div>
+    <div class="lead-note">Type the class name first. Then click one corner, move, and click again to place the box.</div>
     <canvas id="lab" width="640" height="480"></canvas>
-    <label class="field-label" for="cls">class (typed name goes into each box you drag)</label>
+    <label class="field-label" for="cls">class (this name goes on every box you place)</label>
     <input id="cls" type="text" placeholder="cone" value="">
     <div class="actions">
       <button class="btn" onclick="nav(-1)">Prev</button>
@@ -446,11 +538,20 @@ function drawLab() {
     labx.fillStyle = '#FFFFFF';
     labx.fillText(b.cls, b.x + 5, b.y - 5);
   }
-  if (drag) { labx.setLineDash([6, 4]); labx.strokeRect(drag.x, drag.y, drag.w, drag.h); labx.setLineDash([]); }
+  if (drag) {
+    labx.setLineDash([6, 4]);
+    labx.strokeRect(drag.x, drag.y, drag.w, drag.h);
+    labx.setLineDash([]);
+    const size = `${Math.round(drag.w)} x ${Math.round(drag.h)}`;
+    labx.fillStyle = '#FF0033';
+    labx.fillRect(drag.x, drag.y + drag.h, labx.measureText(size).width + 10, 18);
+    labx.fillStyle = '#FFFFFF';
+    labx.fillText(size, drag.x + 5, drag.y + drag.h + 13);
+  }
 }
 
 function pick(n) {
-  current = n; boxes = [];
+  current = n; boxes = []; drag = null;
   uimg.src = `/uimg?n=${n}&v=${uv[n]}`;
   list();
   for (const el of document.querySelectorAll('#uthumbs img')) {
@@ -462,33 +563,75 @@ function pos(e) {
   const r = lab.getBoundingClientRect();
   return [(e.clientX - r.left) * lab.width / r.width, (e.clientY - r.top) * lab.height / r.height];
 }
-lab.onmousedown = e => {
-  if (current === null) return;
-  const [x, y] = pos(e);
-  drag = { x0: x, y0: y, x, y, w: 0, h: 0 };
-};
-lab.onmousemove = e => {
-  if (!drag) return;
-  const [x, y] = pos(e);
+
+// One gesture model for mouse and touch. Click once to drop a corner, move to
+// size the box, click again to keep it. On a touch screen the same press can
+// simply be dragged, which finishes the box when the finger lifts.
+let anchored = false, pressMoved = false, downPt = null;
+
+function sizePending(x, y) {
   drag.x = Math.min(x, drag.x0); drag.y = Math.min(y, drag.y0);
   drag.w = Math.abs(x - drag.x0); drag.h = Math.abs(y - drag.y0);
-  drawLab();
-};
-lab.onmouseup = () => {
-  if (!drag) return;
-  if (drag.w > 5 && drag.h > 5) {
+}
+
+function keepPending() {
+  if (drag && drag.w > 5 && drag.h > 5) {
     boxes.push({ x: drag.x, y: drag.y, w: drag.w, h: drag.h,
                  cls: document.getElementById('cls').value.trim() || 'unlabeled' });
   }
-  drag = null; drawLab(); list();
+  drag = null;
+  drawLab();
+  list();
+}
+
+lab.onpointerdown = e => {
+  if (current === null) return;
+  e.preventDefault();
+  const [x, y] = pos(e);
+  downPt = [x, y];
+  pressMoved = false;
+  if (!drag) {
+    drag = { x0: x, y0: y, x, y, w: 0, h: 0 };
+    anchored = true;
+  } else {
+    anchored = false;
+    sizePending(x, y);
+  }
+  drawLab();
 };
+
+lab.onpointermove = e => {
+  if (!drag) return;
+  const [x, y] = pos(e);
+  const held = e.pointerType === 'mouse' ? e.buttons > 0 : true;
+  if (held && downPt && (Math.abs(x - downPt[0]) > 3 || Math.abs(y - downPt[1]) > 3)) {
+    pressMoved = true;
+  }
+  sizePending(x, y);
+  drawLab();
+};
+
+lab.onpointerup = e => {
+  if (!drag) return;
+  // Dragged: the box is finished on lift. Tapped a second time: also finished.
+  // A first tap that did not move stays open so the next move sizes it.
+  if (pressMoved || !anchored) keepPending();
+  downPt = null;
+};
+
+lab.onpointercancel = () => { downPt = null; };
+
+// Escape drops a box that is still being sized.
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && drag) { drag = null; drawLab(); list(); }
+});
 
 function list() {
   document.getElementById('boxlist').textContent = current === null
     ? 'Click an unlabeled image below to start. Enter saves.'
     : boxes.length
       ? `u${current}: ` + boxes.map(b => b.cls).join(', ')
-      : `u${current}: drag to box an object, or Save with no boxes for a negative.`;
+      : `u${current}: click a corner, move, then click again. Save with no boxes for a negative.`;
 }
 
 function nav(d) {
@@ -523,7 +666,7 @@ function delImg() {
     .then(() => refresh().then(advance));
 }
 
-function undo() { boxes.pop(); drawLab(); list(); }
+function undo() { if (drag) drag = null; else boxes.pop(); drawLab(); list(); }
 
 document.addEventListener('keydown', e => {
   const onBody = e.target === document.body;

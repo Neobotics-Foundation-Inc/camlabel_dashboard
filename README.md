@@ -45,8 +45,10 @@ After `remove`, the checkout and the dataset in `~/data/camlabel/` stay in place
 Collection and labeling are separate stages:
 
 1. Collect: Snap (button or spacebar) saves the current full-resolution frame to the unlabeled pool. Take as many as you want, fast.
-2. Label: click any thumbnail in the unlabeled section. Drag boxes on it, the class field names each box, Enter or Save labels finishes it. The image moves from unlabeled to labeled and the next unlabeled image loads automatically. Prev, Next, or the arrow keys move through the unlabeled images. Delete image throws a bad shot away, saving with no boxes makes a negative example.
-3. Labeled images show as thumbnails with a click-to-view of their boxes.
+2. Label: click or tap any thumbnail in the unlabeled section. Drag boxes on it (or tap one corner, then the other), the class field names each box, Enter or Save labels finishes it. The image moves from unlabeled to labeled and the next unlabeled image loads automatically. Prev, Next, or the arrow keys move through the unlabeled images. Delete image throws a bad shot away, saving with no boxes makes a negative example.
+3. Labeled images show as thumbnails; click or tap one to see its boxes. Deleting a labeled image takes a press and hold on Hold to delete, since it cannot be undone.
+
+The page works with a mouse, a touch screen or the keyboard, on a laptop, a tablet or a phone, in a light or a dark theme (the switch in the top bar).
 
 ## Settings
 
